@@ -1,0 +1,86 @@
+#include <Servo.h>
+#include <LiquidCrystal_I2C.h>
+#include <Wire.h>
+
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+
+const int sensorPin = 5;
+const int pirPin = 2;
+const int rainSensorPin = A0;
+const int ledPin = 3;
+const int buzzerPin = 4;
+
+const int threshold = 500; 
+Servo myServo;
+
+void setup() {
+  pinMode(sensorPin, INPUT);
+  pinMode(pirPin, INPUT);
+  pinMode(buzzerPin, OUTPUT);
+  pinMode(ledPin, OUTPUT);
+  Serial.begin(9600);
+  myServo.attach(9);
+  myServo.write(0);
+
+  lcd.begin(16, 2);
+  lcd.backlight();  
+  lcd.print("Sistem Monitoring");
+  delay(2000);
+  lcd.clear();
+}
+
+void loop() {
+  int vibration = digitalRead(sensorPin);
+  int motionDetected = digitalRead(pirPin);
+  int rainValue = analogRead(rainSensorPin);
+  
+  lcd.clear(); 
+
+  // Vibration Sensor
+  if (vibration == HIGH) {
+    Serial.println("Lari ada Gempa!!!!");
+    lcd.print("Gempa Terdeteksi!");
+    digitalWrite(buzzerPin, HIGH);
+    lcd.setCursor(0, 0);
+    
+  } else {
+    Serial.println("Tidak ada Gempa");
+    digitalWrite(buzzerPin, LOW);
+    lcd.setCursor(0, 0);
+    lcd.print("Tidak ada Gempa");
+  }
+
+  // PIR Sensor
+  if (motionDetected == HIGH) {
+    Serial.println("Gerakan Terdeteksi!");
+    digitalWrite(ledPin, HIGH);
+    lcd.setCursor(0, 1);
+    lcd.print("Gerakan Terdeteksi");
+     delay(1000);
+    lcd.clear();
+  } else {
+    Serial.println("Tidak Ada Gerakan Mencurigakan");
+    digitalWrite(ledPin, LOW);
+    lcd.setCursor(0, 1);
+    lcd.print("Tidak Ada Gerakan");
+    delay(1000);
+    lcd.clear();
+  }
+
+  //RAINDROPS
+  if (rainValue < threshold) {
+    Serial.println("Hujan terdeteksi!");
+    myServo.write(90); 
+    lcd.setCursor(0, 1);
+    lcd.print("Hujan terdeteksi");
+  } else {
+    Serial.println("Hujan Reda");
+     lcd.setCursor(0, 1);
+    lcd.print("Hujan Reda");
+    myServo.write(0); 
+  }
+
+  delay(1000);
+}
