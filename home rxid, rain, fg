@@ -1,0 +1,157 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <Servo.h>
+#include <SPI.h>
+#include <MFRC522.h>
+#include <Adafruit_Fingerprint.h>
+#include <SoftwareSerial.h>
+
+// Pin RFID
+#define SS_PIN 10
+#define RST_PIN 9
+
+// Pin sensor dan output lain
+const int sensorPin = 5;
+const int pirPin = 2;
+const int rainSensorPin = A0;
+const int ledPin = 3;
+const int buzzerPin = 4;
+
+const int threshold = 500;
+
+Servo myServo;
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+MFRC522 mfrc522(SS_PIN, RST_PIN);
+
+// SoftwareSerial untuk fingerprint, pin RX ke TX sensor, pin TX ke RX sensor
+SoftwareSerial fingerSerial(7, 8); // RX, TX
+Adafruit_Fingerprint finger = Adafruit_Fingerprint(&fingerSerial);
+
+void setup() {
+  pinMode(sensorPin, INPUT);
+  pinMode(pirPin, INPUT);
+  pinMode(buzzerPin, OUTPUT);
+  pinMode(ledPin, OUTPUT);
+
+  Serial.begin(9600);
+  SPI.begin();
+  mfrc522.PCD_Init();
+
+  fingerSerial.begin(57600);
+  finger.begin(57600);
+
+  myServo.attach(6); // Servo buka pintu di pin 6
+  myServo.write(0);
+
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.print("Smart Home Ready");
+  delay(2000);
+  lcd.clear();
+}
+
+void loop() {
+  int vibration = digitalRead(sensorPin);
+  int motionDetected = digitalRead(pirPin);
+  int rainValue = analogRead(rainSensorPin);
+
+  // Monitor getar (gempa)
+  if (vibration == HIGH) {
+    Serial.println("Lari ada Gempa!!!!");
+    digitalWrite(buzzerPin, HIGH);
+    lcd.setCursor(0, 0);
+    lcd.print("Gempa: TERDETEKSI");
+  } else {
+    Serial.println("Tidak ada Gempa");
+    digitalWrite(buzzerPin, LOW);
+    lcd.setCursor(0, 0);
+    lcd.print("Gempa: Aman      ");
+  }
+
+  // Monitor PIR (gerakan)
+  if (motionDetected == HIGH) {
+    Serial.println("Gerakan Terdeteksi!");
+    digitalWrite(ledPin, HIGH);
+    lcd.setCursor(0, 1);
+    lcd.print("Gerak: Ada     ");
+  } else {
+    Serial.println("Tidak Ada Gerakan Mencurigakan");
+    digitalWrite(ledPin, LOW);
+    lcd.setCursor(0, 1);
+    lcd.print("Gerak: Tidak   ");
+  }
+
+  // Sensor hujan (servo penutup jendela)
+  if (rainValue < threshold) {
+    Serial.println("Hujan terdeteksi!");
+    myServo.write(90);
+  } else {
+    Serial.println("Hujan Reda");
+    myServo.write(0);
+  }
+
+  // Cek RFID, buka pintu jika valid
+  if (checkRFID()) {
+    bukaPintu();
+  }
+
+  // Cek fingerprint, buka pintu jika valid
+  if (checkFingerprint()) {
+    bukaPintu();
+  }
+
+  delay(1000);
+}
+
+// Fungsi buka pintu dengan servo
+void bukaPintu() {
+  Serial.println("Akses diberikan, membuka pintu...");
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Pintu: TERBUKA");
+  myServo.write(90); // Servo buka
+  delay(5000);       // Buka selama 5 detik
+  myServo.write(0);  // Tutup lagi
+  lcd.clear();
+}
+
+// Fungsi cek RFID
+bool checkRFID() {
+  if (!mfrc522.PICC_IsNewCardPresent()) return false;
+  if (!mfrc522.PICC_ReadCardSerial()) return false;
+
+  String cardID = "";
+  for (byte i = 0; i < mfrc522.uid.size; i++) {
+    cardID += String(mfrc522.uid.uidByte[i], HEX);
+  }
+  cardID.toUpperCase();
+
+  Serial.print("RFID Card ID: ");
+  Serial.println(cardID);
+
+  // Ganti dengan ID RFID valid Anda (contoh)
+  if (cardID == "YOUR_CARD_ID") {
+    Serial.println("RFID valid");
+    return true;
+  }
+  return false;
+}
+
+// Fungsi cek fingerprint
+bool checkFingerprint() {
+  Serial.println("Scan Finger...");
+  int p = finger.getImage();
+  if (p != FINGERPRINT_OK) return false;
+
+  p = finger.image2Tz();
+  if (p != FINGERPRINT_OK) return false;
+
+  p = finger.fingerFastSearch();
+  if (p == FINGERPRINT_OK) {
+    Serial.println("Fingerprint match!");
+    return true;
+  }
+  return false;
+}
