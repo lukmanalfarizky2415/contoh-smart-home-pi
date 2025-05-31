@@ -2,9 +2,7 @@
 #include <LiquidCrystal_I2C.h>
 #include <Wire.h>
 
-
 LiquidCrystal_I2C lcd(0x27, 16, 2);
-
 
 const int sensorPin = 5;
 const int pirPin = 2;
